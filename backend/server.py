@@ -1,6 +1,7 @@
 import asyncio
 
 import tornado.web
+import tornado.escape
 
 from tornado.options import define, options, parse_command_line
 
@@ -10,8 +11,10 @@ define("debug", default=True, help="run in debug mode")
 
 
 class MainHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.write("Hello, world")
+    def post(self):
+        data = tornado.escape.json_decode(self.request.body.decode('utf-8'))
+        print('Got JSON data:', data)
+        self.write({'got': 'your data'})
 
 
 def make_app():
@@ -28,5 +31,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    print('ho')
     asyncio.run(main())
