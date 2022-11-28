@@ -10,7 +10,7 @@ def get_appeal(db: Session):
     return db.execute(appeal).scalars().all()
 
 
-def create_appeal(db: Session, appeal: schemas.AppealBase):
+def create_appeal(db, appeal: schemas.AppealBase):
     db_appeal = AppealModel(**appeal.dict())
     db.add(db_appeal)
     db.commit()

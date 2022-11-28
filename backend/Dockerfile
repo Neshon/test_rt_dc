@@ -1,4 +1,4 @@
-FROM python:3.10-alpine
+FROM python:3.10-slim
 
 EXPOSE 8888
 
@@ -9,6 +9,4 @@ COPY requirements.txt /usr/src/app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
-
-CMD ["python3", "server.py"]
 
