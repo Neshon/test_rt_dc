@@ -16,8 +16,8 @@ services:
         container_name: "rabbitmq"
         image: rabbitmq:3-management-alpine
         environment:
-            - RABBITMQ_DEFAULT_USER=admin
-            - RABBITMQ_DEFAULT_PASS=admin
+            - RABBITMQ_DEFAULT_USER=rabbitmq
+            - RABBITMQ_DEFAULT_PASS=rabbitmq
         ports:
             - '5672:5672'
             - '15672:15672'
@@ -32,6 +32,11 @@ services:
         ports:
             - '8888:8888'
         command: python server.py
+        environment:
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_USER=rabbitmq
+            - RABBITMQ_PASSWORD=rabbitmq
+            - QUEUE_NAME=task_queue
         depends_on:
             - rabbitmq
         networks:
@@ -59,6 +64,10 @@ services:
             - '8000:8000'
         environment:
             - DATABASE_URL=postgresql://postgres:postgres@db:5432/db
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_USER=rabbitmq
+            - RABBITMQ_PASSWORD=rabbitmq
+            - QUEUE_NAME=task_queue
         depends_on:
             - rabbitmq
             - db

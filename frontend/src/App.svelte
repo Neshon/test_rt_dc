@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Support from './lib/support/support.svelte'
+  import Support from './support.svelte'
 </script>
 
 <main class="container">
