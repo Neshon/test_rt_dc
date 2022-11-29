@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class AppealBase(BaseModel):
+class AppealSchema(BaseModel):
     surname: str
     name: str
     patronymic: str

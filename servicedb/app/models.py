@@ -5,8 +5,8 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
-class Appeal(Base):
-    __tablename__ = 'appeal'
+class AppealModel(Base):
+    __tablename__ = "appeal"
     id = Column(Integer, primary_key=True, index=True)
     surname = Column(String)
     name = Column(String)

@@ -1,82 +1,82 @@
 version: '3.8'
 
 services:
-    frontend:
-        container_name: "frontend"
-        build:
-            context: ./frontend
-        ports:
-            - "80:80"
-        depends_on:
-            - backend
-        networks:
-            - network
+  frontend:
+    container_name: "frontend"
+    build:
+      context: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - network
 
-    rabbitmq:
-        container_name: "rabbitmq"
-        image: rabbitmq:3-management-alpine
-        environment:
-            - RABBITMQ_DEFAULT_USER=rabbitmq
-            - RABBITMQ_DEFAULT_PASS=rabbitmq
-        ports:
-            - '5672:5672'
-            - '15672:15672'
-        volumes:
-            - ./rabbitmq:/var/lib/rabbitmq
-        networks:
-            - network
+  rabbitmq:
+    container_name: "rabbitmq"
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - ./rabbitmq:/var/lib/rabbitmq
+    networks:
+      - network
 
-    backend:
-        build: ./backend
-        container_name: backend
-        ports:
-            - '8888:8888'
-        command: python server.py
-        environment:
-            - RABBITMQ_HOST=rabbitmq
-            - RABBITMQ_USER=rabbitmq
-            - RABBITMQ_PASSWORD=rabbitmq
-            - QUEUE_NAME=task_queue
-        depends_on:
-            - rabbitmq
-        networks:
-            - network
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+      - '8888:8888'
+    command: python server.py
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=rabbitmq
+      - RABBITMQ_PASSWORD=rabbitmq
+      - QUEUE_NAME=task_queue
+    depends_on:
+      - rabbitmq
+    networks:
+      - network
 
-    db:
-        image: postgres:13-alpine
-        container_name: db
-        expose:
-            - '5432:5432'
-        environment:
-            - POSTGRES_USER=postgres
-            - POSTGRES_PASSWORD=postgres
-            - POSTGRES_DB=db
-        networks:
-            - network
-        volumes:
-          - ./db:/var/lib/postgresql/data
+  db:
+    image: postgres:13-bullseye
+    container_name: db
+    expose:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=db
+    networks:
+      - network
+    volumes:
+      - ./db:/var/lib/postgresql/data
 
-    servicedb:
-        build: ./servicedb
-        container_name: servicedb
-        command: bash -c 'sleep 5 && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --reload'
-        ports:
-            - '8000:8000'
-        environment:
-            - DATABASE_URL=postgresql://postgres:postgres@db:5432/db
-            - RABBITMQ_HOST=rabbitmq
-            - RABBITMQ_USER=rabbitmq
-            - RABBITMQ_PASSWORD=rabbitmq
-            - QUEUE_NAME=task_queue
-        depends_on:
-            - rabbitmq
-            - db
-        networks:
-            - network
+  servicedb:
+    build: ./servicedb
+    container_name: servicedb
+    command: bash -c 'alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --reload'
+    ports:
+      - '8000:8000'
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/db
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=rabbitmq
+      - RABBITMQ_PASSWORD=rabbitmq
+      - QUEUE_NAME=task_queue
+    depends_on:
+      - rabbitmq
+      - db
+    networks:
+      - network
 
 volumes:
-    db:
-    rabbitmq:
+  db:
+  rabbitmq:
 networks:
-    network:
-        driver: bridge
+  network:
+    driver: bridge

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from time import sleep
 
 import aio_pika
@@ -9,56 +10,66 @@ import tornado.web
 from aio_pika.message import Message
 from tornado.options import define, options, parse_command_line
 
+
+RABBITMQ_HOST = os.environ['RABBITMQ_HOST']
+RABBITMQ_USER = os.environ['RABBITMQ_USER']
+RABBITMQ_PASSWORD = os.environ['RABBITMQ_PASSWORD']
+QUEUE_NAME = os.environ['QUEUE_NAME']
+
 define("port", default=8888, help="run on the given port", type=int)
 define("debug", default=True, help="run in debug mode")
 
+logger = logging.getLogger(__name__)
 
+
+# Подключения к RabbitMQ, если не доступно, то повторяет операцию
 async def connect_rabbitmq():
     rabbitmq_connection = None
-    rabbitmq_chanel = None
 
     while not rabbitmq_connection:
-        conn_str = "amqp://admin:admin@rabbitmq/"
+        rabbitmq_url = f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASSWORD}@{RABBITMQ_HOST}/"
         try:
-            rabbitmq_connection = await aio_pika.connect_robust(conn_str)
-        except Exception as e:
-            print("Can't connect to broker.")
+            rabbitmq_connection = await aio_pika.connect_robust(rabbitmq_url)
+            logger.info("Connect to rabbitmq.")
+        except Exception:
+            logger.info("Can't connect to rabbitmq.")
             sleep(5)
 
-    if not rabbitmq_chanel:
-        rabbitmq_chanel = await rabbitmq_connection.channel()
-
-    return rabbitmq_chanel
+    return rabbitmq_connection
 
 
+# Отправка сообщений в очередь
 class AppealRequestHandler(tornado.web.RequestHandler):
-    logging.basicConfig(level=logging.DEBUG)
-
-    async def post(self):
+    async def post(self) -> None:
+        connection = self.application.settings["amqp_connection"]
+        channel = await connection.channel()
         data = tornado.escape.json_decode(self.request.body.decode('utf-8'))
-        logging.debug(f'Received message body: {data}')
-        print('Got JSON data:', data)
+        queue = await channel.declare_queue(name=QUEUE_NAME, durable=True)
+        try:
+            await channel.default_exchange.publish(
+                Message(
+                    body=json.dumps(data).encode(),
+                    content_type="application/json",
+                ),
+                routing_key=queue.name
+            )
+            logger.info(f"Send message: {data}")
+        finally:
+            await channel.close()
 
-        channel = await connect_rabbitmq()
-        queue = await channel.declare_queue(name='task_queue', durable=True)
-        await channel.default_exchange.publish(
-            Message(
-                body=json.dumps(data).encode(),
-                content_type="application/json",
-            ),
-            routing_key=queue.name
-        )
 
-
-def make_app():
-    return tornado.web.Application([
-        ('/appeal', AppealRequestHandler)
-    ])
+async def make_app() -> tornado.web.Application:
+    amqp_connection = await connect_rabbitmq()
+    # Ручка для фронта
+    return tornado.web.Application(
+        [(r"/appeal", AppealRequestHandler)],
+        amqp_connection=amqp_connection,
+    )
 
 
 async def main():
     parse_command_line()
-    app = make_app()
+    app = await make_app()
     app.listen(options.port)
     await asyncio.Event().wait()
 

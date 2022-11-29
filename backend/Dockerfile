@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.10-slim-buster
 
 EXPOSE 8888
 
@@ -9,4 +9,3 @@ COPY requirements.txt /usr/src/app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
-

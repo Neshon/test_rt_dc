@@ -1,19 +1,28 @@
 import asyncio
 import logging
+import os
 from contextlib import contextmanager
+from time import sleep
 
 import aio_pika
 from fastapi import FastAPI
 
-from . import models, crud, schemas
+from .crud import create_appeal
 from .database import engine, SessionLocal
+from .models import Base
+from .schemas import AppealSchema
+
+RABBITMQ_HOST = os.environ['RABBITMQ_HOST']
+RABBITMQ_USER = os.environ['RABBITMQ_USER']
+RABBITMQ_PASSWORD = os.environ['RABBITMQ_PASSWORD']
+QUEUE_NAME = os.environ['QUEUE_NAME']
+
 
 app = FastAPI()
 
-logger = logging.getLogger("app")
-logger.setLevel(logging.DEBUG)
+Base.metadata.create_all(bind=engine)
 
-models.Base.metadata.create_all(bind=engine)
+logging.basicConfig(level=logging.INFO)
 
 
 @contextmanager
@@ -25,41 +34,50 @@ def get_db():
         db.close()
 
 
-@app.on_event('startup')
-async def startup():
-    loop = asyncio.get_running_loop()
-    asyncio.ensure_future(consume_appeal(loop))
+# Подключения к RabbitMQ, если не доступно, то повторяет операцию
+async def connect_rabbitmq(loop):
+    rabbitmq_connection = None
+
+    while not rabbitmq_connection:
+        rabbitmq_url = f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASSWORD}@{RABBITMQ_HOST}/"
+        try:
+            rabbitmq_connection = await aio_pika.connect_robust(
+                url=rabbitmq_url,
+                loop=loop
+            )
+            logging.info("Connect to rabbitmq.")
+        except Exception:
+            logging.info("Can't connect to rabbitmq.")
+            sleep(5)
+
+    return rabbitmq_connection
 
 
-async def insert_appeal(message: aio_pika.abc.AbstractIncomingMessage):
-    logging.basicConfig(level=logging.DEBUG)
+# Валидация данных и вызов функции сохранения
+async def process_message(message: aio_pika.abc.AbstractIncomingMessage):
     async with message.process():
-        appeal_s = schemas.AppealBase.parse_raw(message.body)
-        logging.debug(f'Received message body: {appeal_s}')
+        appeal_s = AppealSchema.parse_raw(message.body)
+        logging.info(f'Received message: {appeal_s}')
         with get_db() as db:
-            crud.create_appeal(db, appeal_s)
+            create_appeal(db, appeal_s)
 
 
+# Получение сообщений из очереди
 async def consume_appeal(loop):
-    connection = await aio_pika.connect_robust(
-        "amqp://admin:admin@rabbitmq/",
-        loop=loop
-    )
-
-    queue_name = "task_queue"
+    connection = await connect_rabbitmq(loop)
     channel = await connection.channel()
 
     await channel.set_qos(prefetch_count=1)
-    queue = await channel.declare_queue(queue_name, durable=True)
+    queue = await channel.declare_queue(QUEUE_NAME, durable=True)
 
-    await queue.consume(insert_appeal)
+    await queue.consume(process_message)
     try:
         await asyncio.Future()
     finally:
         await connection.close()
 
 
-@app.get('/appeal/')
-async def appeal():
-    with get_db() as db:
-        return crud.get_appeal(db)
+@app.on_event('startup')
+async def startup():
+    loop = asyncio.get_running_loop()
+    asyncio.ensure_future(consume_appeal(loop))
