@@ -40,6 +40,12 @@ async def connect_rabbitmq():
 
 # Отправка сообщений в очередь
 class AppealRequestHandler(tornado.web.RequestHandler):
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+
     async def post(self) -> None:
         connection = self.application.settings["amqp_connection"]
         channel = await connection.channel()
